@@ -1,133 +1,217 @@
-// Importamos las herramientas que vamos a usar
-// React y useState nos permiten manejar la información de la pantalla
-// Los demás son componentes visuales como botones, textos e inputs
+import { Ionicons } from '@expo/vector-icons'; // // SIRVE PARA: Traer los iconos nativos de la papelera y los checkboxes.
 import { useState } from 'react';
-import {
-  Alert,
-  FlatList, StyleSheet,
-  Text, TextInput, TouchableOpacity,
-  View
-} from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-// Definimos qué datos tiene una tarea para que TypeScript no arroje errores
+// ---------------------------------------------------------------------------------------------------------
+// REGLA DE DATOS (INTERFACE) -> // SIRVE PARA: Definir la estructura exacta y obligatoria que debe tener cada tarea (id, nombre, materia, etc.).
+// ---------------------------------------------------------------------------------------------------------
 interface Tarea {
   id: string;
   nombre: string;
   materia: string;
+  fecha: string;
+  prioridad: 'Baja' | 'Media' | 'Alta';
   completada: boolean;
 }
 
-// Esta es la pantalla principal de tareas
 export default function TasksScreen() {
+  // ---------------------------------------------------------------------------------------------------------
+  // ESTADOS (MEMORIAS) -> // SIRVE PARA: Guardar en la memoria lo que el usuario digita en las casillas del formulario.
+  // ---------------------------------------------------------------------------------------------------------
+  const [nombre, setNombre] = useState(''); // // SIRVE PARA: Guardar el nombre de la tarea.
+  const [materia, setMateria] = useState(''); // // SIRVE PARA: Guardar la asignatura.
+  const [fecha, setFecha] = useState(''); // // SIRVE PARA: Guardar la fecha límite.
+  const [prioridad, setPrioridad] = useState<'Baja' | 'Media' | 'Alta'>('Media'); // // SIRVE PARA: Guardar la urgencia (Baja, Media o Alta).
 
-  // tareas = lista donde se guardan todas las tareas
-  // setTareas = función para actualizar esa lista
-  const [tareas, setTareas] = useState<Tarea[]>([]);
+  // ---------------------------------------------------------------------------------------------------------
+  // LISTA DE TAREAS -> // SIRVE PARA: Almacenar el grupo completo de tareas creadas (Inicia con la de Matemáticas).
+  // ---------------------------------------------------------------------------------------------------------
+  const [tareas, setTareas] = useState<Tarea[]>([
+    {
+      id: '1',
+      nombre: 'Ecuaciones lineales',
+      materia: 'Matemáticas',
+      fecha: '2026-06-10',
+      prioridad: 'Alta',
+      completada: false,
+    }
+  ]);
 
-  // nombre = lo que escribe el estudiante en el campo de nombre
-  const [nombre, setNombre] = useState('');
-
-  // materia = lo que escribe el estudiante en el campo de materia
-  const [materia, setMateria] = useState('');
-
-  // Esta función se ejecuta cuando el estudiante toca "Agregar Tarea"
-  const agregarTarea = () => {
-
-    // Si algún campo está vacío muestra un mensaje de error
-    if (nombre === '' || materia === '') {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+  // ---------------------------------------------------------------------------------------------------------
+  // FUNCIÓN AGREGAR TAREA -> // SIRVE PARA: Validar que no haya campos vacíos, armar el paquete e insertarlo en la lista.
+  // ---------------------------------------------------------------------------------------------------------
+  const handleAgregarTarea = () => {
+    // // SIRVE PARA: Verificar si faltan datos obligatorios y frenar el proceso con una alerta en el celular.
+    if (!nombre.trim() || !materia.trim() || !fecha.trim()) {
+      Alert.alert('Campos vacíos', 'Por favor, escribe el nombre, materia y fecha de la tarea.');
       return;
     }
 
-    // Crea una tarea nueva con id único, nombre, materia y estado
+    // // SIRVE PARA: Empaquetar los datos ingresados y asignarle un ID único usando el reloj del sistema.
     const nuevaTarea: Tarea = {
-      id: Date.now().toString(), // id único basado en la hora
+      id: Date.now().toString(),
       nombre: nombre,
       materia: materia,
-      completada: false, // por defecto la tarea no está completada
+      fecha: fecha,
+      prioridad: prioridad,
+      completada: false // // SIRVE PARA: Que toda tarea comience sin estar hecha (false).
     };
 
-    // Agrega la nueva tarea a la lista existente
+    // // SIRVE PARA: Añadir la nueva tarea al final de la lista conservando las anteriores.
     setTareas([...tareas, nuevaTarea]);
 
-    // Limpia los campos después de agregar
+    // // SIRVE PARA: Limpiar por completo las cajitas de la pantalla después de guardar.
     setNombre('');
     setMateria('');
+    setFecha('');
+    setPrioridad('Media');
   };
 
-  // Esta función marca una tarea como completada o pendiente
-  const completarTarea = (id: string) => {
-    setTareas(tareas.map(tarea =>
-      // Busca la tarea por id y cambia su estado
-      tarea.id === id ? { ...tarea, completada: !tarea.completada } : tarea
-    ));
+  // ---------------------------------------------------------------------------------------------------------
+  // FUNCIÓN ELIMINAR TAREA -> // SIRVE PARA: Sacar de la lista permanentemente la tarea en la que se toque la basura.
+  // ---------------------------------------------------------------------------------------------------------
+  const handleEliminarTarea = (id: string) => {
+    // // SIRVE PARA: Crear un grupo nuevo excluyendo el ID que se quiere eliminar.
+    const listaFiltrada = tareas.filter(tarea => tarea.id !== id);
+    setTareas(listaFiltrada);
   };
 
-  // Esta función elimina una tarea de la lista
-  const eliminarTarea = (id: string) => {
-    // Filtra y quita la tarea que tenga ese id
-    setTareas(tareas.filter(tarea => tarea.id !== id));
+  // ---------------------------------------------------------------------------------------------------------
+  // FUNCIÓN COMPLETAR -> // SIRVE PARA: Tachar o destachar la tarea al tocar el cuadro blanco.
+  // ---------------------------------------------------------------------------------------------------------
+  const toggleCompletada = (id: string) => {
+    // // SIRVE PARA: Recorrer la lista, buscar el ID presionado e invertir su estado (de completado a pendiente o viceversa).
+    const listaActualizada = tareas.map(tarea => {
+      if (tarea.id === id) {
+        return { ...tarea, completada: !tarea.completada };
+      }
+      return tarea;
+    });
+    setTareas(listaActualizada);
   };
 
-  // Aquí empieza lo visual, lo que el estudiante ve en pantalla
+  // ---------------------------------------------------------------------------------------------------------
+  // DISEÑO VISUAL (RENDER) -> // SIRVE PARA: Construir y organizar todo lo que se ve en el celular de forma estética.
+  // ---------------------------------------------------------------------------------------------------------
   return (
-    <View style={styles.container}>
+    <View style={styles.mainContainer}>
+      
+      {/* HEADER -> // SIRVE PARA: Mostrar el título principal "Mis Tareas" y el botón azul de ajustes. */}
+      <View style={styles.header}>
+        <Text style={styles.tituloHeader}>Mis Tareas</Text>
+        <TouchableOpacity style={styles.botonAjustes}>
+          <Ionicons name="settings" size={20} color="white" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Título de la pantalla */}
-      <Text style={styles.titulo}>Mis Tareas</Text>
+      {/* CONTAINER FORMULARIO -> // SIRVE PARA: Envolver los campos de texto e inputs de la app. */}
+      <View style={styles.formularioContainer}>
+        
+        {/* INPUT NOMBRE -> // SIRVE PARA: La casilla de escritura del nombre del pendiente escolar. */}
+        <TextInput 
+          style={styles.input} 
+          placeholder="Nombre de la tarea"
+          placeholderTextColor="#aaa"
+          value={nombre}
+          onChangeText={setNombre} 
+        />
+        
+        {/* INPUT MATERIA -> // SIRVE PARA: La casilla de escritura de la materia. */}
+        <TextInput 
+          style={styles.input} 
+          placeholder="Materia"
+          placeholderTextColor="#aaa"
+          value={materia}
+          onChangeText={setMateria} 
+        />
+        
+        {/* INPUT FECHA -> // SIRVE PARA: La casilla de escritura para la fecha límite. */}
+        <TextInput 
+          style={styles.input} 
+          placeholder="Fecha límite (Ej: 15 Jun)"
+          placeholderTextColor="#aaa"
+          value={fecha}
+          onChangeText={setFecha} 
+        />
 
-      {/* Campo para escribir el nombre de la tarea */}
-      <TextInput
-        style={styles.input}
-        placeholder="Nombre de la tarea"
-        value={nombre}
-        onChangeText={setNombre}
-      />
+        {/* SELECTOR PRIORIDADES -> // SIRVE PARA: Pintar los 3 botones horizontales de urgencia. */}
+        <View style={styles.contenedorPrioridades}>
+          {(['Baja', 'Media', 'Alta'] as const).map((nivel) => (
+            <TouchableOpacity 
+              key={nivel} 
+              // // SIRVE PARA: Pintar de morado oscuro solo el botón que fue seleccionado.
+              style={[
+                styles.botonPrioridad, 
+                prioridad === nivel && styles.prioridadSeleccionada
+              ]}
+              onPress={() => setPrioridad(nivel)} 
+            >
+              <Text style={[
+                styles.textoPrioridad, 
+                prioridad === nivel && styles.textoPrioridadSeleccionada
+              ]}>
+                {nivel}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* Campo para escribir la materia */}
-      <TextInput
-        style={styles.input}
-        placeholder="Materia"
-        value={materia}
-        onChangeText={setMateria}
-      />
+        {/* BOTÓN AGREGAR -> // SIRVE PARA: Crear el botón morado que guarda la información al ser presionado. */}
+        <TouchableOpacity style={styles.botonAgregar} onPress={handleAgregarTarea}>
+          <Text style={styles.textoBotonAgregar}>Agregar Tarea</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Botón para agregar la tarea */}
-      <TouchableOpacity style={styles.boton} onPress={agregarTarea}>
-        <Text style={styles.botonTexto}>Agregar Tarea</Text>
-      </TouchableOpacity>
-
-      {/* Lista que muestra todas las tareas guardadas */}
+      {/* FLATLIST -> // SIRVE PARA: Generar las tarjetas de la lista automáticamente según el número de tareas. */}
       <FlatList
-        data={tareas}
-        keyExtractor={item => item.id}
+        data={tareas} 
+        keyExtractor={(item) => item.id} 
+        contentContainerStyle={styles.listaContainer}
         renderItem={({ item }) => (
           
-          /* Cada tarea se muestra como una tarjeta */
-          <View style={styles.tarea}>
-            <View style={styles.tareaInfo}>
-
-              {/* Nombre de la tarea, si está completada aparece tachado */}
-              <Text style={[styles.tareaNombre,
-                item.completada && styles.tareaCompletada]}>
-                {item.nombre}
-              </Text>
-
-              {/* Nombre de la materia */}
-              <Text style={styles.tareaMateria}>{item.materia}</Text>
+          // TARJETA DE TAREA -> // SIRVE PARA: El diseño de cada bloque blanco que contiene los datos de la tarea.
+          <View style={styles.tarjetaTarea}>
+            <View style={styles.infoTarea}>
+              <View style={styles.filaTitulo}>
+                {/* TEXTO DINÁMICO -> // SIRVE PARA: Trazar una línea horizontal sobre el texto si la tarea ya se completó. */}
+                <Text style={[styles.nombreTarea, item.completada && styles.tareaTachada]}>
+                  {item.nombre}
+                </Text>
+                
+                {/* BADGE PRIORIDAD -> // SIRVE PARA: Ponerle un color de fondo diferente (rojo, amarillo o azul) según el peligro. */}
+                <View style={[
+                  styles.badgePrioridad, 
+                  item.prioridad === 'Alta' ? { backgroundColor: '#ffdddd' } : 
+                  item.prioridad === 'Media' ? { backgroundColor: '#fff3cd' } : { backgroundColor: '#d1ecf1' }
+                ]}>
+                  <Text style={[
+                    styles.textoBadge,
+                    item.prioridad === 'Alta' ? { color: '#dc3545' } : 
+                    item.prioridad === 'Media' ? { color: '#856404' } : { color: '#0c5460' }
+                  ]}>
+                    {item.prioridad}
+                  </Text>
+                </View>
+              </View>
+              
+              <Text style={styles.materiaTarea}>{item.materia}</Text>
+              {item.fecha ? <Text style={styles.fechaTarea}>📅 {item.fecha}</Text> : null}
             </View>
 
-            {/* Botón para marcar como completada o pendiente */}
-            <TouchableOpacity onPress={() => completarTarea(item.id)}>
-              <Text style={styles.check}>
-                {item.completada ? '✅' : '⬜'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Botón para eliminar la tarea */}
-            <TouchableOpacity onPress={() => eliminarTarea(item.id)}>
-              <Text style={styles.eliminar}>🗑️</Text>
-            </TouchableOpacity>
+            {/* BOTONES ACCIONES -> // SIRVE PARA: Mostrar el checkbox de listo y la papelera de eliminación a la derecha. */}
+            <View style={styles.acciones}>
+              <TouchableOpacity onPress={() => toggleCompletada(item.id)} style={styles.checkbox}>
+                <Ionicons 
+                  name={item.completada ? "checkbox" : "square-outline"} 
+                  size={24} 
+                  color={item.completada ? "#5c4dbf" : "#ccc"} 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={() => handleEliminarTarea(item.id)}>
+                <Ionicons name="trash-outline" size={22} color="#888" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       />
@@ -135,47 +219,144 @@ export default function TasksScreen() {
   );
 }
 
-// Aquí definimos los estilos visuales de cada elemento
+// -------------------------------------------------------------------------
+// HOJA DE ESTILOS -> // SIRVE PARA: Definir tamaños, colores de fondo, márgenes y tipos de fuentes (CSS).
+// -------------------------------------------------------------------------
 const styles = StyleSheet.create({
-
-  // Fondo general de la pantalla (con espacio arriba para que no tape la barra de estado)
-  container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5', paddingTop: 60 },
-
-  // Estilo del título
-  titulo: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#4f46e5' },
-
-  // Estilo de los campos de texto
-  input: { backgroundColor: 'white', padding: 12, borderRadius: 8,
-    marginBottom: 10, borderWidth: 1, borderColor: '#ddd' },
-
-  // Estilo del botón agregar
-  boton: { backgroundColor: '#4f46e5', padding: 14, borderRadius: 8,
-    alignItems: 'center', marginBottom: 20 },
-
-  // Estilo del texto del botón
-  botonTexto: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-
-  // Estilo de cada tarjeta de tarea
-  tarea: { backgroundColor: 'white', padding: 14, borderRadius: 8,
-    marginBottom: 10, flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: '#ddd' },
-
-  // Contenedor del texto de la tarea
-  tareaInfo: { flex: 1 },
-
-  // Texto del nombre de la tarea
-  tareaNombre: { fontSize: 16, fontWeight: '500' },
-
-  // Estilo cuando la tarea está completada (texto tachado)
-  tareaCompletada: { textDecorationLine: 'line-through', color: '#999' },
-
-  // Texto de la materia
-  tareaMateria: { fontSize: 13, color: '#666', marginTop: 2 },
-
-  // Botón de completar
-  check: { fontSize: 22, marginRight: 10 },
-
-  // Botón de eliminar
-  eliminar: { fontSize: 22 },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingTop: 50,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  tituloHeader: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#5c4dbf',
+  },
+  botonAjustes: {
+    backgroundColor: '#3b82f6',
+    padding: 8,
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  formularioContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  contenedorPrioridades: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  botonPrioridad: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginHorizontal: 3,
+  },
+  prioridadSeleccionada: {
+    backgroundColor: '#5c4dbf',
+    borderColor: '#5c4dbf',
+  },
+  textoPrioridad: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  textoPrioridadSeleccionada: {
+    color: '#fff',
+  },
+  botonAgregar: {
+    backgroundColor: '#5c4dbf',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  textoBotonAgregar: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  listaContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  tarjetaTarea: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  infoTarea: {
+    flex: 1,
+  },
+  filaTitulo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  nombreTarea: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginRight: 8,
+  },
+  tareaTachada: {
+    textDecorationLine: 'line-through',
+    color: '#aaa',
+  },
+  badgePrioridad: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  textoBadge: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  materiaTarea: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  fechaTarea: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  acciones: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    marginRight: 15,
+  },
 });
+
 
