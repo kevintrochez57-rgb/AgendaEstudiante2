@@ -1,125 +1,175 @@
-// 1. IMPORTS - Importamos todos los componentes necesarios de React Native
-import { Ionicons } from '@expo/vector-icons'; // Iconos bonitos
-import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import {
-  Alert, // Para mostrar alertas
-  FlatList, // Botón táctil con efecto de opacidad
-  Modal, // Para crear estilos (como CSS pero en JS)
-  ScrollView, // Para mostrar texto
-  StyleSheet, // Contenedor similar a un div
-  Text, // Ventana emergente
-  TextInput, // Para hacer scroll vertical
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
   TouchableOpacity,
-  View, // Contenedor similar a un div
+  View,
 } from 'react-native';
 
-// 2. DEFINICIÓN DE TIPOS (TypeScript)
-// Definimos cómo se ve un Material
-interface Material {
-  id: string;      // Identificador único
-  title: string;   // Título del material
-  description: string; // Descripción
-  category: string; // Categoría (ej: "PDF", "Video", "Link")
-  completed: boolean; // Si está completado o no
+// Definición de tipos
+interface Materia {
+  id: string;
+  nombre: string;
+  color: string;
+  horario: string;
+  profesor: string;
+  aulas: string;
 }
 
-// 3. COMPONENTE PRINCIPAL
-export default function MaterialsScreen() {
-  // 4. ESTADOS (variables que pueden cambiar y afectar la UI)
-  
-  // Estado para la lista de materiales
-  const [materials, setMaterials] = useState<Material[]>([
-    {
-      id: '1',
-      title: 'Fundamentos de React Native',
-      description: 'Aprende los conceptos básicos de React Native',
-      category: 'Video',
-      completed: false,
-    },
-    {
-      id: '2',
-      title: 'Guía de TypeScript',
-      description: 'Documentación completa de TypeScript',
-      category: 'PDF',
-      completed: true,
-    },
-    {
-      id: '3',
-      title: 'Ejercicios prácticos',
-      description: '10 ejercicios para practicar',
-      category: 'Ejercicio',
-      completed: false,
-    },
-  ]);
+interface Tarea {
+  id: string;
+  nombre: string;
+  materia: string;
+  fecha: string;
+  prioridad: 'Baja' | 'Media' | 'Alta';
+  completada: boolean;
+}
 
-  // Estado para controlar el modal (ventana emergente)
+const MATERIAS_KEY = '@agenda_materias';
+const TAREAS_KEY = '@agenda_tareas';
+
+// Colores predefinidos para materias
+const COLORES = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+  '#F5B7B1', '#A9DFBF', '#F9E79F', '#D7BDE2', '#AED6F1'
+];
+
+export default function MateriasScreen() {
+  const [materias, setMaterias] = useState<Materia[]>([]);
+  const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Estado para el modal
   const [modalVisible, setModalVisible] = useState(false);
-  
-  // Estado para el filtro de categoría
-  const [selectedCategory, setSelectedCategory] = useState('Todos');
-  
-  // Estado para el nuevo material (cuando agregamos uno)
-  const [newMaterial, setNewMaterial] = useState({
-    title: '',
-    description: '',
-    category: 'PDF',
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nuevaMateria, setNuevaMateria] = useState({
+    nombre: '',
+    color: COLORES[0],
+    horario: '',
+    profesor: '',
+    aulas: '',
   });
 
-  // 5. FUNCIONES (la lógica de la app)
-  
-  // Función para agregar un nuevo material
-  const addMaterial = () => {
-    // Validamos que el título no esté vacío
-    if (!newMaterial.title.trim()) {
-      Alert.alert('Error', 'El título es requerido');
+  // Cargar datos al iniciar
+  useEffect(() => {
+    cargarDatos();
+  }, []);
+
+  const cargarDatos = async () => {
+    try {
+      const materiasGuardadas = await AsyncStorage.getItem(MATERIAS_KEY);
+      const tareasGuardadas = await AsyncStorage.getItem(TAREAS_KEY);
+      
+      if (materiasGuardadas) {
+        setMaterias(JSON.parse(materiasGuardadas));
+      } else {
+        // Datos de ejemplo
+        const materiasEjemplo: Materia[] = [
+          {
+            id: '1',
+            nombre: 'Cálculo',
+            color: COLORES[0],
+            horario: 'Lunes y Miércoles 8:00-10:00',
+            profesor: 'Dr. García',
+            aulas: 'Salón 101',
+          },
+          {
+            id: '2',
+            nombre: 'Programación',
+            color: COLORES[1],
+            horario: 'Martes y Jueves 10:00-12:00',
+            profesor: 'Ing. Rodríguez',
+            aulas: 'Laboratorio 3',
+          },
+          {
+            id: '3',
+            nombre: 'Estadística',
+            color: COLORES[2],
+            horario: 'Viernes 14:00-16:00',
+            profesor: 'Dra. Martínez',
+            aulas: 'Salón 204',
+          },
+        ];
+        setMaterias(materiasEjemplo);
+        await AsyncStorage.setItem(MATERIAS_KEY, JSON.stringify(materiasEjemplo));
+      }
+      
+      if (tareasGuardadas) {
+        setTareas(JSON.parse(tareasGuardadas));
+      }
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const guardarMaterias = async (nuevasMaterias: Materia[]) => {
+    try {
+      await AsyncStorage.setItem(MATERIAS_KEY, JSON.stringify(nuevasMaterias));
+    } catch (error) {
+      console.error('Error al guardar materias:', error);
+    }
+  };
+
+  // Agregar o editar materia
+  const guardarMateria = () => {
+    if (!nuevaMateria.nombre.trim()) {
+      Alert.alert('Error', 'El nombre de la materia es requerido');
       return;
     }
 
-    // Creamos el nuevo material
-    const material: Material = {
-      id: Date.now().toString(), // ID único basado en timestamp
-      title: newMaterial.title,
-      description: newMaterial.description,
-      category: newMaterial.category,
-      completed: false,
-    };
+    if (editandoId) {
+      // Editar materia existente
+      const materiasActualizadas = materias.map(materia =>
+        materia.id === editandoId
+          ? { ...nuevaMateria, id: editandoId }
+          : materia
+      );
+      setMaterias(materiasActualizadas);
+      guardarMaterias(materiasActualizadas);
+      Alert.alert('Éxito', 'Materia actualizada ✅');
+    } else {
+      // Agregar nueva materia
+      const nueva: Materia = {
+        id: Date.now().toString(),
+        ...nuevaMateria,
+      };
+      const nuevasMaterias = [...materias, nueva];
+      setMaterias(nuevasMaterias);
+      guardarMaterias(nuevasMaterias);
+      Alert.alert('Éxito', 'Materia agregada ✅');
+    }
 
-    // Agregamos el material a la lista
-    setMaterials([material, ...materials]);
-    
-    // Limpiamos el formulario
-    setNewMaterial({ title: '', description: '', category: 'PDF' });
-    
-    // Cerramos el modal
-    setModalVisible(false);
-    
-    // Mostramos mensaje de éxito
-    Alert.alert('Éxito', 'Material agregado correctamente');
+    cerrarModal();
   };
 
-  // Función para marcar/desmarcar como completado
-  const toggleCompleted = (id: string) => {
-    setMaterials(
-      materials.map((material) =>
-        material.id === id
-          ? { ...material, completed: !material.completed }
-          : material
-      )
-    );
-  };
-
-  // Función para eliminar un material
-  const deleteMaterial = (id: string) => {
+  // Eliminar materia
+  const eliminarMateria = (id: string, nombre: string) => {
+    // Verificar si hay tareas con esta materia
+    const tareasConMateria = tareas.filter(t => t.materia === nombre);
+    
     Alert.alert(
-      'Eliminar Material',
-      '¿Estás seguro de que quieres eliminar este material?',
+      'Eliminar Materia',
+      tareasConMateria.length > 0
+        ? `La materia "${nombre}" tiene ${tareasConMateria.length} tarea(s). ¿Eliminar de todos modos?`
+        : `¿Eliminar la materia "${nombre}"?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Eliminar',
-          onPress: () => {
-            setMaterials(materials.filter((material) => material.id !== id));
-            Alert.alert('Éxito', 'Material eliminado correctamente');
+          onPress: async () => {
+            const nuevasMaterias = materias.filter(m => m.id !== id);
+            setMaterias(nuevasMaterias);
+            await guardarMaterias(nuevasMaterias);
+            Alert.alert('Éxito', 'Materia eliminada 🗑️');
           },
           style: 'destructive',
         },
@@ -127,229 +177,186 @@ export default function MaterialsScreen() {
     );
   };
 
-  // Función para filtrar materiales por categoría
-  const getFilteredMaterials = () => {
-    if (selectedCategory === 'Todos') {
-      return materials;
-    }
-    return materials.filter(
-      (material) => material.category === selectedCategory
+  const abrirModalEditar = (materia: Materia) => {
+    setEditandoId(materia.id);
+    setNuevaMateria({
+      nombre: materia.nombre,
+      color: materia.color,
+      horario: materia.horario,
+      profesor: materia.profesor,
+      aulas: materia.aulas,
+    });
+    setModalVisible(true);
+  };
+
+  const cerrarModal = () => {
+    setModalVisible(false);
+    setEditandoId(null);
+    setNuevaMateria({
+      nombre: '',
+      color: COLORES[0],
+      horario: '',
+      profesor: '',
+      aulas: '',
+    });
+  };
+
+  // Contar tareas por materia
+  const contarTareasPorMateria = (nombreMateria: string) => {
+    return tareas.filter(t => t.materia === nombreMateria && !t.completada).length;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Cargando materias... 📚</Text>
+      </View>
     );
-  };
+  }
 
-  // Función para obtener el color según la categoría
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'Video':
-        return '#FF6B6B';
-      case 'PDF':
-        return '#4ECDC4';
-      case 'Ejercicio':
-        return '#45B7D1';
-      default:
-        return '#96CEB4';
-    }
-  };
-
-  // Función para obtener el icono según la categoría
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Video':
-        return 'play-circle';
-      case 'PDF':
-        return 'document-text';
-      case 'Ejercicio':
-        return 'barbell';
-      default:
-        return 'folder';
-    }
-  };
-
-  // 6. RENDERIZADO DE LA UI (lo que ve el usuario)
   return (
     <View style={styles.container}>
-      {/* HEADER - Título y botón de agregar */}
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mis Materiales</Text>
+        <Text style={styles.title}>Mis Materias</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setModalVisible(true)}
         >
-          <Ionicons name="add" size={24} color="white" />
+          <Ionicons name="add" size={24} color="#fff" />
           <Text style={styles.addButtonText}>Agregar</Text>
         </TouchableOpacity>
       </View>
 
-      {/* FILTROS POR CATEGORÍA */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-      >
-        {['Todos', 'Video', 'PDF', 'Ejercicio'].map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.filterChip,
-              selectedCategory === category && styles.filterChipActive,
-            ]}
-            onPress={() => setSelectedCategory(category)}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedCategory === category && styles.filterTextActive,
-              ]}
-            >
-              {category}
+      {/* Lista de materias */}
+      <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+        {materias.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="book-outline" size={70} color="#ccc" />
+            <Text style={styles.emptyStateText}>No hay materias</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Presiona "Agregar" para crear tu primera materia
             </Text>
-          </TouchableOpacity>
-        ))}
+          </View>
+        ) : (
+          materias.map((materia) => (
+            <TouchableOpacity
+              key={materia.id}
+              style={[styles.materiaCard, { borderLeftColor: materia.color }]}
+              onPress={() => abrirModalEditar(materia)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.materiaHeader}>
+                <View style={[styles.colorCircle, { backgroundColor: materia.color }]} />
+                <Text style={styles.materiaNombre}>{materia.nombre}</Text>
+                {contarTareasPorMateria(materia.nombre) > 0 && (
+                  <View style={styles.pendienteBadge}>
+                    <Text style={styles.pendienteText}>
+                      {contarTareasPorMateria(materia.nombre)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              
+              {materia.horario ? (
+                <Text style={styles.materiaInfo}>
+                  <Ionicons name="time-outline" size={14} color="#666" /> {materia.horario}
+                </Text>
+              ) : null}
+              
+              {materia.profesor ? (
+                <Text style={styles.materiaInfo}>
+                  <Ionicons name="person-outline" size={14} color="#666" /> {materia.profesor}
+                </Text>
+              ) : null}
+              
+              {materia.aulas ? (
+                <Text style={styles.materiaInfo}>
+                  <Ionicons name="location-outline" size={14} color="#666" /> {materia.aulas}
+                </Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => eliminarMateria(materia.id, materia.nombre)}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
-      {/* LISTA DE MATERIALES */}
-      <FlatList
-        data={getFilteredMaterials()}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.materialCard,
-              item.completed && styles.materialCardCompleted,
-            ]}
-            onPress={() => toggleCompleted(item.id)}
-            onLongPress={() => deleteMaterial(item.id)} // Mantener presionado para eliminar
-          >
-            {/* Icono de categoría */}
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: getCategoryColor(item.category) },
-              ]}
-            >
-              <Ionicons
-                name={getCategoryIcon(item.category)}
-                size={30}
-                color="white"
-              />
-            </View>
-
-            {/* Información del material */}
-            <View style={styles.materialInfo}>
-              <View style={styles.materialHeader}>
-                <Text
-                  style={[
-                    styles.materialTitle,
-                    item.completed && styles.materialTitleCompleted,
-                  ]}
-                >
-                  {item.title}
-                </Text>
-                <View
-                  style={[
-                    styles.categoryBadge,
-                    { backgroundColor: getCategoryColor(item.category) },
-                  ]}
-                >
-                  <Text style={styles.categoryText}>{item.category}</Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.materialDescription,
-                  item.completed && styles.materialDescriptionCompleted,
-                ]}
-              >
-                {item.description}
-              </Text>
-            </View>
-
-            {/* Check de completado */}
-            <View style={styles.checkContainer}>
-              <Ionicons
-                name={item.completed ? 'checkbox' : 'square-outline'}
-                size={24}
-                color={item.completed ? '#4CAF50' : '#999'}
-              />
-            </View>
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContainer}
-      />
-
-      {/* MODAL PARA AGREGAR NUEVO MATERIAL */}
+      {/* MODAL PARA AGREGAR/EDITAR MATERIA */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={cerrarModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Agregar Nuevo Material</Text>
+            <Text style={styles.modalTitle}>
+              {editandoId ? '✏️ Editar Materia' : '📚 Nueva Materia'}
+            </Text>
 
-            {/* Input para el título */}
             <TextInput
               style={styles.input}
-              placeholder="Título del material"
+              placeholder="Nombre de la materia *"
               placeholderTextColor="#999"
-              value={newMaterial.title}
-              onChangeText={(text) =>
-                setNewMaterial({ ...newMaterial, title: text })
-              }
+              value={nuevaMateria.nombre}
+              onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, nombre: text })}
             />
 
-            {/* Input para la descripción */}
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Descripción"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={3}
-              value={newMaterial.description}
-              onChangeText={(text) =>
-                setNewMaterial({ ...newMaterial, description: text })
-              }
-            />
-
-            {/* Selector de categoría */}
-            <Text style={styles.label}>Categoría:</Text>
-            <View style={styles.categorySelector}>
-              {['PDF', 'Video', 'Ejercicio'].map((cat) => (
+            <Text style={styles.label}>Color:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coloresScroll}>
+              {COLORES.map((color) => (
                 <TouchableOpacity
-                  key={cat}
+                  key={color}
                   style={[
-                    styles.categoryOption,
-                    newMaterial.category === cat && styles.categoryOptionActive,
+                    styles.colorOption,
+                    { backgroundColor: color },
+                    nuevaMateria.color === color && styles.colorOptionSelected,
                   ]}
-                  onPress={() =>
-                    setNewMaterial({ ...newMaterial, category: cat })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.categoryOptionText,
-                      newMaterial.category === cat &&
-                        styles.categoryOptionTextActive,
-                    ]}
-                  >
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
+                  onPress={() => setNuevaMateria({ ...nuevaMateria, color })}
+                />
               ))}
-            </View>
+            </ScrollView>
 
-            {/* Botones del modal */}
+            <TextInput
+              style={styles.input}
+              placeholder="Horario (ej: Lun 8-10, Mié 8-10)"
+              placeholderTextColor="#999"
+              value={nuevaMateria.horario}
+              onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, horario: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Profesor/a"
+              placeholderTextColor="#999"
+              value={nuevaMateria.profesor}
+              onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, profesor: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Aula / Salón"
+              placeholderTextColor="#999"
+              value={nuevaMateria.aulas}
+              onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, aulas: text })}
+            />
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
+                onPress={cerrarModal}
               >
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton]}
-                onPress={addMaterial}
+                onPress={guardarMateria}
               >
                 <Text style={styles.saveButtonText}>Guardar</Text>
               </TouchableOpacity>
@@ -361,134 +368,124 @@ export default function MaterialsScreen() {
   );
 }
 
-// 7. ESTILOS - Todo el diseño de la app
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Ocupa todo el espacio disponible
-    backgroundColor: '#F5F5F5', // Color de fondo gris claro
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#007AFF',
   },
   header: {
-    flexDirection: 'row', // Horizontal
-    justifyContent: 'space-between', // Espacio entre elementos
-    alignItems: 'center', // Centrado vertical
-    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#E5E5EA',
   },
-  headerTitle: {
-    fontSize: 24,
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000',
   },
   addButton: {
     flexDirection: 'row',
     backgroundColor: '#007AFF',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   addButtonText: {
-    color: 'white',
-    marginLeft: 5,
-    fontWeight: '600',
-  },
-  filtersContainer: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    backgroundColor: '#fff',
-  },
-  filterChip: {
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    marginRight: 10,
-  },
-  filterChipActive: {
-    backgroundColor: '#007AFF',
-  },
-  filterText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  filterTextActive: {
     color: '#fff',
+    fontWeight: '600',
+    marginLeft: 6,
   },
-  listContainer: {
-    padding: 15,
+  list: {
+    flex: 1,
+    padding: 16,
   },
-  materialCard: {
-    flexDirection: 'row',
+  materiaCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 15,
+    padding: 16,
     marginBottom: 12,
-    alignItems: 'center',
+    borderLeftWidth: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  materialCardCompleted: {
-    backgroundColor: '#F9F9F9',
-    opacity: 0.8,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  materialInfo: {
-    flex: 1,
-  },
-  materialHeader: {
+  materiaHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 10,
   },
-  materialTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+  colorCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  materiaNombre: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
     flex: 1,
   },
-  materialTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#999',
-  },
-  categoryBadge: {
+  pendienteBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 5,
   },
-  categoryText: {
+  pendienteText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
   },
-  materialDescription: {
+  materiaInfo: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 5,
+  },
+  deleteButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#333',
+  },
+  emptyStateSubtext: {
+    marginTop: 4,
     fontSize: 14,
     color: '#666',
-  },
-  materialDescriptionCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#999',
-  },
-  checkContainer: {
-    marginLeft: 10,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -496,26 +493,23 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '90%',
     maxWidth: 400,
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
-    color: '#333',
+    color: '#000',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
     padding: 12,
     marginBottom: 15,
     fontSize: 16,
-    color: '#333',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
+    color: '#000',
   },
   label: {
     fontSize: 14,
@@ -523,40 +517,35 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
-  categorySelector: {
+  coloresScroll: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 15,
   },
-  categoryOption: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    marginHorizontal: 5,
-    borderRadius: 8,
+  colorOption: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  categoryOptionActive: {
-    backgroundColor: '#007AFF',
-  },
-  categoryOptionText: {
-    color: '#666',
-    fontWeight: '600',
-  },
-  categoryOptionTextActive: {
-    color: '#fff',
+  colorOptionSelected: {
+    borderColor: '#000',
+    borderWidth: 3,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 10,
   },
   modalButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F2F2F7',
   },
   saveButton: {
     backgroundColor: '#007AFF',

@@ -1,360 +1,447 @@
-import { Ionicons } from '@expo/vector-icons'; // // SIRVE PARA: Traer los iconos nativos de la papelera y los checkboxes.
-import { useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
-// ---------------------------------------------------------------------------------------------------------
-// REGLA DE DATOS (INTERFACE) -> // SIRVE PARA: Definir la estructura exacta y obligatoria que debe tener cada tarea (id, nombre, materia, etc.).
-// ---------------------------------------------------------------------------------------------------------
 interface Tarea {
   id: string;
-  nombre: string;
-  materia: string;
-  fecha: string;
-  prioridad: 'Baja' | 'Media' | 'Alta';
-  completada: boolean;
+  title: string;
+  description: string;
+  date: string;
+  priority: 'Alta' | 'Media' | 'Baja';
+  material: string;
+  completed: boolean;
 }
 
 export default function TasksScreen() {
-  // ---------------------------------------------------------------------------------------------------------
-  // ESTADOS (MEMORIAS) -> // SIRVE PARA: Guardar en la memoria lo que el usuario digita en las casillas del formulario.
-  // ---------------------------------------------------------------------------------------------------------
-  const [nombre, setNombre] = useState(''); // // SIRVE PARA: Guardar el nombre de la tarea.
-  const [materia, setMateria] = useState(''); // // SIRVE PARA: Guardar la asignatura.
-  const [fecha, setFecha] = useState(''); // // SIRVE PARA: Guardar la fecha límite.
-  const [prioridad, setPrioridad] = useState<'Baja' | 'Media' | 'Alta'>('Media'); // // SIRVE PARA: Guardar la urgencia (Baja, Media o Alta).
+  const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  
+  // Estado para nueva tarea
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newPriority, setNewPriority] = useState<'Alta' | 'Media' | 'Baja'>('Media');
+  const [newMaterial, setNewMaterial] = useState('');
 
-  // ---------------------------------------------------------------------------------------------------------
-  // LISTA DE TAREAS -> // SIRVE PARA: Almacenar el grupo completo de tareas creadas (Inicia con la de Matemáticas).
-  // ---------------------------------------------------------------------------------------------------------
-  const [tareas, setTareas] = useState<Tarea[]>([
-    {
-      id: '1',
-      nombre: 'Ecuaciones lineales',
-      materia: 'Matemáticas',
-      fecha: '2026-06-10',
-      prioridad: 'Alta',
-      completada: false,
+  // Cargar tareas al iniciar
+  useEffect(() => {
+    cargarTareas();
+  }, []);
+
+  // Guardar tareas en AsyncStorage
+  const guardarTareas = async (tareasActualizadas: Tarea[]) => {
+    try {
+      await AsyncStorage.setItem('@tareas', JSON.stringify(tareasActualizadas));
+      setTareas(tareasActualizadas);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudieron guardar las tareas');
     }
-  ]);
+  };
 
-  // ---------------------------------------------------------------------------------------------------------
-  // FUNCIÓN AGREGAR TAREA -> // SIRVE PARA: Validar que no haya campos vacíos, armar el paquete e insertarlo en la lista.
-  // ---------------------------------------------------------------------------------------------------------
-  const handleAgregarTarea = () => {
-    // // SIRVE PARA: Verificar si faltan datos obligatorios y frenar el proceso con una alerta en el celular.
-    if (!nombre.trim() || !materia.trim() || !fecha.trim()) {
-      Alert.alert('Campos vacíos', 'Por favor, escribe el nombre, materia y fecha de la tarea.');
+  // Cargar tareas desde AsyncStorage
+  const cargarTareas = async () => {
+    try {
+      const tareasGuardadas = await AsyncStorage.getItem('@tareas');
+      if (tareasGuardadas) {
+        setTareas(JSON.parse(tareasGuardadas));
+      }
+    } catch (error) {
+      console.log('Error al cargar tareas:', error);
+    }
+  };
+
+  // Agregar nueva tarea
+  const agregarTarea = () => {
+    if (!newTitle.trim()) {
+      Alert.alert('Error', 'El título es obligatorio');
       return;
     }
 
-    // // SIRVE PARA: Empaquetar los datos ingresados y asignarle un ID único usando el reloj del sistema.
     const nuevaTarea: Tarea = {
       id: Date.now().toString(),
-      nombre: nombre,
-      materia: materia,
-      fecha: fecha,
-      prioridad: prioridad,
-      completada: false // // SIRVE PARA: Que toda tarea comience sin estar hecha (false).
+      title: newTitle,
+      description: newDescription,
+      date: newDate || new Date().toLocaleDateString(),
+      priority: newPriority,
+      material: newMaterial || 'General',
+      completed: false,
     };
 
-    // // SIRVE PARA: Añadir la nueva tarea al final de la lista conservando las anteriores.
-    setTareas([...tareas, nuevaTarea]);
-
-    // // SIRVE PARA: Limpiar por completo las cajitas de la pantalla después de guardar.
-    setNombre('');
-    setMateria('');
-    setFecha('');
-    setPrioridad('Media');
+    const nuevasTareas = [...tareas, nuevaTarea];
+    guardarTareas(nuevasTareas);
+    
+    // Limpiar formulario
+    setNewTitle('');
+    setNewDescription('');
+    setNewDate('');
+    setNewPriority('Media');
+    setNewMaterial('');
+    setModalVisible(false);
+    
+    Alert.alert('Éxito', 'Tarea agregada correctamente');
   };
 
-  // ---------------------------------------------------------------------------------------------------------
-  // FUNCIÓN ELIMINAR TAREA -> // SIRVE PARA: Sacar de la lista permanentemente la tarea en la que se toque la basura.
-  // ---------------------------------------------------------------------------------------------------------
-  const handleEliminarTarea = (id: string) => {
-    // // SIRVE PARA: Crear un grupo nuevo excluyendo el ID que se quiere eliminar.
-    const listaFiltrada = tareas.filter(tarea => tarea.id !== id);
-    setTareas(listaFiltrada);
+  // Eliminar tarea
+  const eliminarTarea = (id: string) => {
+    Alert.alert(
+      'Eliminar tarea',
+      '¿Estás seguro de que quieres eliminar esta tarea?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            const nuevasTareas = tareas.filter(tarea => tarea.id !== id);
+            guardarTareas(nuevasTareas);
+          },
+        },
+      ]
+    );
   };
 
-  // ---------------------------------------------------------------------------------------------------------
-  // FUNCIÓN COMPLETAR -> // SIRVE PARA: Tachar o destachar la tarea al tocar el cuadro blanco.
-  // ---------------------------------------------------------------------------------------------------------
+  // Marcar como completada
   const toggleCompletada = (id: string) => {
-    // // SIRVE PARA: Recorrer la lista, buscar el ID presionado e invertir su estado (de completado a pendiente o viceversa).
-    const listaActualizada = tareas.map(tarea => {
-      if (tarea.id === id) {
-        return { ...tarea, completada: !tarea.completada };
-      }
-      return tarea;
-    });
-    setTareas(listaActualizada);
+    const nuevasTareas = tareas.map(tarea =>
+      tarea.id === id ? { ...tarea, completed: !tarea.completed } : tarea
+    );
+    guardarTareas(nuevasTareas);
   };
 
-  // ---------------------------------------------------------------------------------------------------------
-  // DISEÑO VISUAL (RENDER) -> // SIRVE PARA: Construir y organizar todo lo que se ve en el celular de forma estética.
-  // ---------------------------------------------------------------------------------------------------------
-  return (
-    <View style={styles.mainContainer}>
+  // Obtener color según prioridad
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Alta': return '#ff4444';
+      case 'Media': return '#ffbb33';
+      case 'Baja': return '#00C851';
+      default: return '#aaa';
+    }
+  };
+
+  // Renderizar cada tarea
+  const renderTarea = ({ item }: { item: Tarea }) => (
+    <View style={[styles.tareaCard, item.completed && styles.tareaCompletada]}>
+      <TouchableOpacity
+        style={styles.checkbox}
+        onPress={() => toggleCompletada(item.id)}
+      >
+        <Ionicons
+          name={item.completed ? 'checkbox-outline' : 'square-outline'}
+          size={24}
+          color="#007AFF"
+        />
+      </TouchableOpacity>
       
-      {/* HEADER -> // SIRVE PARA: Mostrar el título principal "Mis Tareas" y el botón azul de ajustes. */}
-      <View style={styles.header}>
-        <Text style={styles.tituloHeader}>Mis Tareas</Text>
-        <TouchableOpacity style={styles.botonAjustes}>
-          <Ionicons name="settings" size={20} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* CONTAINER FORMULARIO -> // SIRVE PARA: Envolver los campos de texto e inputs de la app. */}
-      <View style={styles.formularioContainer}>
-        
-        {/* INPUT NOMBRE -> // SIRVE PARA: La casilla de escritura del nombre del pendiente escolar. */}
-        <TextInput 
-          style={styles.input} 
-          placeholder="Nombre de la tarea"
-          placeholderTextColor="#aaa"
-          value={nombre}
-          onChangeText={setNombre} 
-        />
-        
-        {/* INPUT MATERIA -> // SIRVE PARA: La casilla de escritura de la materia. */}
-        <TextInput 
-          style={styles.input} 
-          placeholder="Materia"
-          placeholderTextColor="#aaa"
-          value={materia}
-          onChangeText={setMateria} 
-        />
-        
-        {/* INPUT FECHA -> // SIRVE PARA: La casilla de escritura para la fecha límite. */}
-        <TextInput 
-          style={styles.input} 
-          placeholder="Fecha límite (Ej: 15 Jun)"
-          placeholderTextColor="#aaa"
-          value={fecha}
-          onChangeText={setFecha} 
-        />
-
-        {/* SELECTOR PRIORIDADES -> // SIRVE PARA: Pintar los 3 botones horizontales de urgencia. */}
-        <View style={styles.contenedorPrioridades}>
-          {(['Baja', 'Media', 'Alta'] as const).map((nivel) => (
-            <TouchableOpacity 
-              key={nivel} 
-              // // SIRVE PARA: Pintar de morado oscuro solo el botón que fue seleccionado.
-              style={[
-                styles.botonPrioridad, 
-                prioridad === nivel && styles.prioridadSeleccionada
-              ]}
-              onPress={() => setPrioridad(nivel)} 
-            >
-              <Text style={[
-                styles.textoPrioridad, 
-                prioridad === nivel && styles.textoPrioridadSeleccionada
-              ]}>
-                {nivel}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      <View style={styles.tareaContent}>
+        <Text style={[styles.tareaTitle, item.completed && styles.textoCompletado]}>
+          {item.title}
+        </Text>
+        <Text style={styles.tareaDescription}>{item.description}</Text>
+        <View style={styles.tareaDetalles}>
+          <Text style={styles.tareaFecha}>📅 {item.date}</Text>
+          <Text style={styles.tareaMateria}>📚 {item.material}</Text>
         </View>
+      </View>
+      
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => eliminarTarea(item.id)}
+      >
+        <Ionicons name="trash-outline" size={22} color="#ff4444" />
+      </TouchableOpacity>
+    </View>
+  );
 
-        {/* BOTÓN AGREGAR -> // SIRVE PARA: Crear el botón morado que guarda la información al ser presionado. */}
-        <TouchableOpacity style={styles.botonAgregar} onPress={handleAgregarTarea}>
-          <Text style={styles.textoBotonAgregar}>Agregar Tarea</Text>
-        </TouchableOpacity>
+  return (
+    <View style={styles.container}>
+      {/* Título */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Mis Tareas</Text>
+        <Text style={styles.headerSubtitle}>
+          {tareas.filter(t => !t.completed).length} pendientes | {tareas.length} total
+        </Text>
       </View>
 
-      {/* FLATLIST -> // SIRVE PARA: Generar las tarjetas de la lista automáticamente según el número de tareas. */}
+      {/* Lista de tareas */}
       <FlatList
-        data={tareas} 
-        keyExtractor={(item) => item.id} 
+        data={tareas}
+        renderItem={renderTarea}
+        keyExtractor={item => item.id}
         contentContainerStyle={styles.listaContainer}
-        renderItem={({ item }) => (
-          
-          // TARJETA DE TAREA -> // SIRVE PARA: El diseño de cada bloque blanco que contiene los datos de la tarea.
-          <View style={styles.tarjetaTarea}>
-            <View style={styles.infoTarea}>
-              <View style={styles.filaTitulo}>
-                {/* TEXTO DINÁMICO -> // SIRVE PARA: Trazar una línea horizontal sobre el texto si la tarea ya se completó. */}
-                <Text style={[styles.nombreTarea, item.completada && styles.tareaTachada]}>
-                  {item.nombre}
-                </Text>
-                
-                {/* BADGE PRIORIDAD -> // SIRVE PARA: Ponerle un color de fondo diferente (rojo, amarillo o azul) según el peligro. */}
-                <View style={[
-                  styles.badgePrioridad, 
-                  item.prioridad === 'Alta' ? { backgroundColor: '#ffdddd' } : 
-                  item.prioridad === 'Media' ? { backgroundColor: '#fff3cd' } : { backgroundColor: '#d1ecf1' }
-                ]}>
-                  <Text style={[
-                    styles.textoBadge,
-                    item.prioridad === 'Alta' ? { color: '#dc3545' } : 
-                    item.prioridad === 'Media' ? { color: '#856404' } : { color: '#0c5460' }
-                  ]}>
-                    {item.prioridad}
-                  </Text>
-                </View>
-              </View>
-              
-              <Text style={styles.materiaTarea}>{item.materia}</Text>
-              {item.fecha ? <Text style={styles.fechaTarea}>📅 {item.fecha}</Text> : null}
-            </View>
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="checkmark-done-circle-outline" size={80} color="#ccc" />
+            <Text style={styles.emptyText}>No hay tareas</Text>
+            <Text style={styles.emptySubtext}>Presiona el botón + para agregar</Text>
+          </View>
+        }
+      />
 
-            {/* BOTONES ACCIONES -> // SIRVE PARA: Mostrar el checkbox de listo y la papelera de eliminación a la derecha. */}
-            <View style={styles.acciones}>
-              <TouchableOpacity onPress={() => toggleCompletada(item.id)} style={styles.checkbox}>
-                <Ionicons 
-                  name={item.completada ? "checkbox" : "square-outline"} 
-                  size={24} 
-                  color={item.completada ? "#5c4dbf" : "#ccc"} 
-                />
+      {/* Botón flotante */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setModalVisible(true)}
+      >
+        <Ionicons name="add" size={30} color="white" />
+      </TouchableOpacity>
+
+      {/* Modal para agregar tarea */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Nueva Tarea</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Título *"
+              value={newTitle}
+              onChangeText={setNewTitle}
+            />
+            
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Descripción"
+              value={newDescription}
+              onChangeText={setNewDescription}
+              multiline
+              numberOfLines={3}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Fecha (DD/MM/AAAA)"
+              value={newDate}
+              onChangeText={setNewDate}
+            />
+            
+            <Text style={styles.label}>Prioridad:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={newPriority}
+                onValueChange={(itemValue: string) => setNewPriority(itemValue as 'Alta' | 'Media' | 'Baja')}
+              >
+                <Picker.Item label="🔴 Alta" value="Alta" />
+                <Picker.Item label="🟡 Media" value="Media" />
+                <Picker.Item label="🟢 Baja" value="Baja" />
+              </Picker>
+            </View>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Materia"
+              value={newMaterial}
+              onChangeText={setNewMaterial}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancelar</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity onPress={() => handleEliminarTarea(item.id)}>
-                <Ionicons name="trash-outline" size={22} color="#888" />
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={agregarTarea}
+              >
+                <Text style={styles.buttonText}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </View>
-        )}
-      />
+        </View>
+      </Modal>
     </View>
   );
 }
 
-// -------------------------------------------------------------------------
-// HOJA DE ESTILOS -> // SIRVE PARA: Definir tamaños, colores de fondo, márgenes y tipos de fuentes (CSS).
-// -------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  mainContainer: {
+  container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingTop: 50,
+    backgroundColor: '#f5f5f5',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
+    backgroundColor: '#007AFF',
+    padding: 20,
+    paddingTop: 50,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  tituloHeader: {
+  headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#5c4dbf',
+    color: 'white',
   },
-  botonAjustes: {
-    backgroundColor: '#3b82f6',
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 5,
+  },
+  listaContainer: {
+    padding: 15,
+  },
+  tareaCard: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tareaCompletada: {
+    backgroundColor: '#f0f0f0',
+    opacity: 0.7,
+  },
+  checkbox: {
+    marginRight: 12,
+  },
+  tareaContent: {
+    flex: 1,
+  },
+  tareaTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  textoCompletado: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+  },
+  tareaDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  tareaDetalles: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  tareaFecha: {
+    fontSize: 12,
+    color: '#888',
+  },
+  tareaMateria: {
+    fontSize: 12,
+    color: '#888',
+  },
+  deleteButton: {
     padding: 8,
-    borderRadius: 20,
-    width: 36,
-    height: 36,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#007AFF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  formularioContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 15,
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
+    marginBottom: 15,
     fontSize: 16,
-    marginBottom: 10,
   },
-  contenedorPrioridades: {
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 5,
+    color: '#333',
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 10,
   },
-  botonPrioridad: {
+  button: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginHorizontal: 3,
-  },
-  prioridadSeleccionada: {
-    backgroundColor: '#5c4dbf',
-    borderColor: '#5c4dbf',
-  },
-  textoPrioridad: {
-    color: '#666',
-    fontWeight: '600',
-  },
-  textoPrioridadSeleccionada: {
-    color: '#fff',
-  },
-  botonAgregar: {
-    backgroundColor: '#5c4dbf',
-    padding: 14,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  textoBotonAgregar: {
-    color: '#fff',
+  cancelButton: {
+    backgroundColor: '#ccc',
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
     fontSize: 16,
-    fontWeight: 'bold',
   },
-  listaContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  tarjetaTarea: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyContainer: {
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+    justifyContent: 'center',
+    padding: 50,
   },
-  infoTarea: {
-    flex: 1,
+  emptyText: {
+    fontSize: 18,
+    color: '#999',
+    marginTop: 10,
   },
-  filaTitulo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  nombreTarea: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginRight: 8,
-  },
-  tareaTachada: {
-    textDecorationLine: 'line-through',
-    color: '#aaa',
-  },
-  badgePrioridad: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  textoBadge: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  materiaTarea: {
+  emptySubtext: {
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 2,
-  },
-  fechaTarea: {
-    fontSize: 12,
-    color: '#9ca3af',
-  },
-  acciones: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    marginRight: 15,
+    color: '#bbb',
+    marginTop: 5,
   },
 });
