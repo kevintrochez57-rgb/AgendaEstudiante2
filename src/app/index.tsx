@@ -1,8 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import { useEffect, useState } from 'react';
 import {
   Alert,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,549 +15,668 @@ import {
   View,
 } from 'react-native';
 
-// Definición de tipos
-interface Task {
+// Tipos de datos
+interface Materia {
   id: string;
-  title: string;
-  date: string;
-  priority: 'Alta' | 'Media' | 'Baja';
-  completed: boolean;
+  nombre: string;
+  profesor: string;
+  fechaEntrega: string;
+  importancia: 'Alta' | 'Media' | 'Baja';
+  descripcion: string;
+  completada: boolean;
 }
 
-interface QuickNote {
+interface Nota {
   id: string;
-  text: string;
+  titulo: string;
+  contenido: string;
+  materiaId: string;
+  fecha: string;
+  importante: boolean;
 }
 
 export default function HomeScreen() {
-  // Estado para las tareas
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: '1',
-      title: 'Parcial de Cálculo',
-      date: '2026-06-09',
-      priority: 'Alta',
-      completed: false,
-    },
-    {
-      id: '2',
-      title: 'Proyecto POO',
-      date: '2026-06-14',
-      priority: 'Media',
-      completed: false,
-    },
-    {
-      id: '3',
-      title: 'Lectura Cap. 5',
-      date: '2026-06-04',
-      priority: 'Media',
-      completed: false,
-    },
-  ]);
-
-  // Estado para la nota rápida
-  const [quickNote, setQuickNote] = useState('');
-  const [savedNotes, setSavedNotes] = useState<QuickNote[]>([
-    { id: '1', text: 'Llevar calculadora al parcial de cálculo' },
-    { id: '2', text: 'Revisar apuntes de Mate' },
-  ]);
-
-  // Estado para el próximo examen
-  const [nextExam] = useState({
-    title: 'Examen Final - Estadística',
-    date: '2026-06-15',
-    location: 'Salón 204',
+  // Estados para materias
+  const [materias, setMaterias] = useState<Materia[]>([]);
+  const [modalMateriaVisible, setModalMateriaVisible] = useState(false);
+  const [nuevaMateria, setNuevaMateria] = useState({
+    nombre: '',
+    profesor: '',
+    fechaEntrega: '',
+    importancia: 'Media' as 'Alta' | 'Media' | 'Baja',
+    descripcion: '',
+    completada: false
   });
+  
+  // Estados para notas
+  const [notas, setNotas] = useState<Nota[]>([]);
+  const [modalNotaVisible, setModalNotaVisible] = useState(false);
+  const [nuevaNota, setNuevaNota] = useState({
+    titulo: '',
+    contenido: '',
+    materiaId: '',
+    importante: false
+  });
+  
+  // Estado para el menú flotante
+  const [menuVisible, setMenuVisible] = useState(false);
+  
+  // Estado para seleccionar vista
+  const [vistaActual, setVistaActual] = useState<'materias' | 'notas'>('materias');
+  
+  // Estado para ordenamiento
+  const [ordenPor, setOrdenPor] = useState<'fecha' | 'importancia'>('fecha');
 
-  // Obtener fecha actual formateada
-  const getCurrentDate = () => {
-    const date = new Date();
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    };
-    return date.toLocaleDateString('es-ES', options);
+  // Cargar datos al iniciar
+  useEffect(() => {
+    cargarMaterias();
+    cargarNotas();
+  }, []);
+
+  // ========== FUNCIONES PARA MATERIAS ==========
+  const cargarMaterias = async () => {
+    try {
+      const guardadas = await AsyncStorage.getItem('@materias');
+      if (guardadas) setMaterias(JSON.parse(guardadas));
+    } catch (error) {}
   };
 
-  // Formatear fecha de tarea
-  const formatTaskDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'short',
-    };
-    return date.toLocaleDateString('es-ES', options);
+  const guardarMaterias = async (nuevas: Materia[]) => {
+    await AsyncStorage.setItem('@materias', JSON.stringify(nuevas));
+    setMaterias(nuevas);
   };
 
-  // Obtener texto de prioridad/urgencia
-  const getPriorityText = (priority: string, dateString: string) => {
-    const today = new Date();
-    const taskDate = new Date(dateString);
-    const daysDiff = Math.ceil(
-      (taskDate.getTime() - today.getTime()) / (1000 * 3600 * 24)
+  const agregarMateria = async () => {
+    if (!nuevaMateria.nombre.trim()) {
+      Alert.alert('Error', 'El nombre de la materia es obligatorio');
+      return;
+    }
+    if (!nuevaMateria.fechaEntrega.trim()) {
+      Alert.alert('Error', 'La fecha de entrega es obligatoria');
+      return;
+    }
+
+    const materia: Materia = {
+      id: Date.now().toString(),
+      ...nuevaMateria,
+    };
+
+    guardarMaterias([...materias, materia]);
+    setNuevaMateria({
+      nombre: '',
+      profesor: '',
+      fechaEntrega: '',
+      importancia: 'Media',
+      descripcion: '',
+      completada: false
+    });
+    setModalMateriaVisible(false);
+    setMenuVisible(false);
+    
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Éxito', 'Materia agregada');
+  };
+
+  const eliminarMateria = async (id: string) => {
+    Alert.alert('Eliminar', '¿Eliminar esta materia?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { 
+        text: 'Eliminar', 
+        style: 'destructive',
+        onPress: async () => {
+          guardarMaterias(materias.filter(m => m.id !== id));
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      }
+    ]);
+  };
+
+  const toggleMateriaCompletada = async (id: string) => {
+    const nuevas = materias.map(m =>
+      m.id === id ? { ...m, completada: !m.completada } : m
     );
-
-    if (priority === 'Alta') return 'Urgente';
-    if (priority === 'Media' && daysDiff <= 7) return 'Esta semana';
-    return 'Próximamente';
+    guardarMaterias(nuevas);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Obtener color según urgencia
-  const getPriorityColor = (priority: string, dateString: string) => {
-    const text = getPriorityText(priority, dateString);
-    switch (text) {
-      case 'Urgente':
-        return '#FF3B30';
-      case 'Esta semana':
-        return '#FF9500';
-      default:
-        return '#34C759';
+  // ========== FUNCIONES PARA NOTAS ==========
+  const cargarNotas = async () => {
+    try {
+      const guardadas = await AsyncStorage.getItem('@notas');
+      if (guardadas) setNotas(JSON.parse(guardadas));
+    } catch (error) {}
+  };
+
+  const guardarNotas = async (nuevas: Nota[]) => {
+    await AsyncStorage.setItem('@notas', JSON.stringify(nuevas));
+    setNotas(nuevas);
+  };
+
+  const agregarNota = async () => {
+    if (!nuevaNota.titulo.trim()) {
+      Alert.alert('Error', 'El título es obligatorio');
+      return;
+    }
+
+    const nota: Nota = {
+      id: Date.now().toString(),
+      titulo: nuevaNota.titulo,
+      contenido: nuevaNota.contenido,
+      materiaId: nuevaNota.materiaId,
+      fecha: new Date().toLocaleDateString(),
+      importante: nuevaNota.importante,
+    };
+
+    guardarNotas([...notas, nota]);
+    setNuevaNota({ titulo: '', contenido: '', materiaId: '', importante: false });
+    setModalNotaVisible(false);
+    setMenuVisible(false);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Éxito', 'Nota agregada');
+  };
+
+  const eliminarNota = async (id: string) => {
+    guardarNotas(notas.filter(n => n.id !== id));
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const toggleImportante = async (id: string) => {
+    const nuevas = notas.map(n =>
+      n.id === id ? { ...n, importante: !n.importante } : n
+    );
+    guardarNotas(nuevas);
+  };
+
+  // ========== COMPARTIR TAREAS ==========
+  const compartirTareas = async () => {
+    const materiasPendientes = materias.filter(m => !m.completada);
+    
+    if (materiasPendientes.length === 0) {
+      Alert.alert('No hay tareas', 'No hay tareas pendientes para compartir');
+      return;
+    }
+
+    let mensaje = ' MIS TAREAS PENDIENTES\n\n';
+    mensaje += ` ${new Date().toLocaleDateString()}\n`;
+    mensaje += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    materiasPendientes.forEach((materia, index) => {
+      const emojiImportancia = materia.importancia === 'Alta' ? '🔥' : materia.importancia === 'Media' ? '⚠️' : '📌';
+      mensaje += `${index + 1}. ${emojiImportancia} ${materia.nombre}\n`;
+      mensaje += `    Entrega: ${materia.fechaEntrega}\n`;
+      if (materia.descripcion) {
+        mensaje += `    ${materia.descripcion}\n`;
+      }
+      mensaje += `\n`;
+    });
+    
+    mensaje += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    mensaje += `✅ Total: ${materiasPendientes.length} tareas pendientes\n`;
+    mensaje += `📱 Enviado desde Agenda Estudiantil`;
+    
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(mensaje);
+      } else {
+        Alert.alert('Error', 'No se puede compartir en este dispositivo');
+      }
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo compartir las tareas');
     }
   };
 
-  // Calcular días hasta el examen
-  const getDaysUntil = (dateString: string) => {
-    const today = new Date();
-    const examDate = new Date(dateString);
-    const diffTime = examDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 3600 * 24));
-    return diffDays;
-  };
-
-  // Agregar nota rápida
-  const addQuickNote = () => {
-    if (quickNote.trim()) {
-      setSavedNotes([
-        { id: Date.now().toString(), text: quickNote },
-        ...savedNotes,
-      ]);
-      setQuickNote('');
-      Alert.alert('Éxito', 'Nota agregada correctamente');
+  // Ordenar materias
+  const getMateriasOrdenadas = () => {
+    let ordenadas = [...materias];
+    
+    if (ordenPor === 'fecha') {
+      ordenadas.sort((a, b) => {
+        const fechaA = a.fechaEntrega.split('/').reverse().join('');
+        const fechaB = b.fechaEntrega.split('/').reverse().join('');
+        return fechaA.localeCompare(fechaB);
+      });
     } else {
-      Alert.alert('Error', 'Escribe una nota antes de guardar');
+      const prioridad = { 'Alta': 0, 'Media': 1, 'Baja': 2 };
+      ordenadas.sort((a, b) => prioridad[a.importancia] - prioridad[b.importancia]);
+    }
+    
+    return ordenadas;
+  };
+
+  // Obtener nombre de materia por ID
+  const getNombreMateria = (id: string) => {
+    const materia = materias.find(m => m.id === id);
+    return materia ? materia.nombre : 'Sin materia';
+  };
+
+  // Obtener color de importancia
+  const getImportanciaColor = (importancia: string) => {
+    switch (importancia) {
+      case 'Alta': return '#ff4444';
+      case 'Media': return '#ffbb33';
+      case 'Baja': return '#00C851';
+      default: return '#aaa';
     }
   };
 
-  // Eliminar nota
-  const deleteNote = (id: string) => {
-    Alert.alert(
-      'Eliminar Nota',
-      '¿Estás seguro de que quieres eliminar esta nota?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          onPress: () => {
-            setSavedNotes(savedNotes.filter((note) => note.id !== id));
-            Alert.alert('Éxito', 'Nota eliminada');
-          },
-          style: 'destructive',
-        },
-      ]
-    );
+  const getImportanciaTexto = (importancia: string) => {
+    switch (importancia) {
+      case 'Alta': return ' Urgente';
+      case 'Media': return ' Importante';
+      case 'Baja': return ' Normal';
+      default: return '';
+    }
   };
 
-  // Marcar tarea como completada
-  const toggleTaskCompleted = (id: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
-  };
-
-  // Navegar a pantalla de materiales
-  const goToMaterials = () => {
-    router.push('/(tabs)/materials');
-  };
-
-  // Navegar a pantalla de tareas
-  const goToTasks = () => {
-    router.push('/(tabs)/tareas');
-  };
-
-  // Contar tareas pendientes
-  const pendingTasksCount = tasks.filter((task) => !task.completed).length;
-  const pendingTasks = tasks.filter((task) => !task.completed);
-
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* HEADER - Saludo y fecha */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>¡Hola, Estudiante!</Text>
-          <Text style={styles.date}>{getCurrentDate()}</Text>
-          <Text style={styles.pendingBadge}>
-            {pendingTasksCount} tareas pendientes
-          </Text>
+  // Renderizar materia
+  const renderMateria = ({ item }: { item: Materia }) => (
+    <View style={[styles.materiaCard, item.completada && styles.materiaCompletada]}>
+      <TouchableOpacity onPress={() => toggleMateriaCompletada(item.id)} style={styles.checkbox}>
+        <Ionicons name={item.completada ? 'checkbox-outline' : 'square-outline'} size={24} color="#007AFF" />
+      </TouchableOpacity>
+      
+      <View style={styles.materiaInfo}>
+        <Text style={[styles.materiaNombre, item.completada && styles.textoCompletado]}>{item.nombre}</Text>
+        {item.profesor ? <Text style={styles.materiaDetalle}> {item.profesor}</Text> : null}
+        <Text style={styles.materiaDetalle}> Entrega: {item.fechaEntrega}</Text>
+        {item.descripcion ? <Text style={styles.materiaDetalle}>📝 {item.descripcion}</Text> : null}
+        <View style={[styles.importanciaBadge, { backgroundColor: getImportanciaColor(item.importancia) }]}>
+          <Text style={styles.importanciaTexto}>{getImportanciaTexto(item.importancia)}</Text>
         </View>
-        <TouchableOpacity style={styles.profileButton} onPress={goToMaterials}>
-          <Ionicons name="person-circle-outline" size={50} color="#007AFF" />
+      </View>
+      
+      <TouchableOpacity onPress={() => eliminarMateria(item.id)} style={styles.deleteButton}>
+        <Ionicons name="trash-outline" size={22} color="#ff4444" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Renderizar nota
+  const renderNota = ({ item }: { item: Nota }) => (
+    <View style={[styles.notaCard, item.importante && styles.notaImportante]}>
+      <View style={styles.notaHeader}>
+        <TouchableOpacity onPress={() => toggleImportante(item.id)}>
+          <Ionicons 
+            name={item.importante ? 'star' : 'star-outline'} 
+            size={22} 
+            color={item.importante ? '#FF9800' : '#ccc'} 
+          />
+        </TouchableOpacity>
+        <View style={styles.notaMateriaTag}>
+          <Text style={styles.notaMateria}> {getNombreMateria(item.materiaId)}</Text>
+        </View>
+        <TouchableOpacity onPress={() => eliminarNota(item.id)}>
+          <Ionicons name="trash-outline" size={20} color="#ff4444" />
         </TouchableOpacity>
       </View>
+      <Text style={styles.notaTitulo}>{item.titulo}</Text>
+      <Text style={styles.notaContenido}>{item.contenido}</Text>
+      <Text style={styles.notaFecha}> {item.fecha}</Text>
+    </View>
+  );
 
-      {/* TAREAS PENDIENTES */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Tareas Pendientes</Text>
-          <TouchableOpacity onPress={goToTasks}>
-            <Text style={styles.seeAllText}>Ver todas</Text>
+  // Obtener tareas pendientes
+  const tareasPendientes = materias.filter(m => !m.completada);
+  const tareasUrgentes = materias.filter(m => !m.completada && m.importancia === 'Alta');
+  const materiasOrdenadas = getMateriasOrdenadas();
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.greeting}>¡Hola, Estudiante!</Text>
+          <TouchableOpacity onPress={compartirTareas} style={styles.shareButton}>
+            <Ionicons name="share-social" size={24} color="white" />
           </TouchableOpacity>
         </View>
-
-        {pendingTasks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done-circle" size={60} color="#34C759" />
-            <Text style={styles.emptyStateText}>
-              ¡No hay tareas pendientes!
-            </Text>
-            <Text style={styles.emptyStateSubtext}>
-              Disfruta tu día 😊
-            </Text>
-          </View>
-        ) : (
-          pendingTasks.map((task) => (
-            <TouchableOpacity
-              key={task.id}
-              style={styles.taskCard}
-              onPress={() => toggleTaskCompleted(task.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.taskContent}>
-                <Text style={styles.taskTitle}>{task.title}</Text>
-                <Text style={styles.taskDate}>
-                  {formatTaskDate(task.date)}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.priorityBadge,
-                  {
-                    backgroundColor: getPriorityColor(
-                      task.priority,
-                      task.date
-                    ),
-                  },
-                ]}
-              >
-                <Text style={styles.priorityText}>
-                  {getPriorityText(task.priority, task.date)}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
+        <Text style={styles.date}>
+          {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </Text>
+        <Text style={styles.pendingCount}>
+          {tareasPendientes.length} tareas pendientes
+        </Text>
+        {tareasUrgentes.length > 0 && (
+          <Text style={styles.urgentCount}>
+             {tareasUrgentes.length} urgentes
+          </Text>
         )}
       </View>
 
-      {/* NOTA RÁPIDA */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Nota Rápida</Text>
-        <View style={styles.quickNoteContainer}>
-          <TextInput
-            style={styles.quickNoteInput}
-            placeholder="Escribe una nota rápida..."
-            placeholderTextColor="#999"
-            value={quickNote}
-            onChangeText={setQuickNote}
-            multiline
-          />
-          <TouchableOpacity style={styles.saveNoteButton} onPress={addQuickNote}>
-            <Ionicons name="save-outline" size={24} color="#007AFF" />
-          </TouchableOpacity>
-        </View>
+      {/* Selector de ordenamiento */}
+      <View style={styles.sortContainer}>
+        <Text style={styles.sortLabel}>Ordenar por:</Text>
+        <TouchableOpacity 
+          style={[styles.sortButton, ordenPor === 'fecha' && styles.sortButtonActive]}
+          onPress={() => setOrdenPor('fecha')}
+        >
+          <Ionicons name="calendar" size={16} color={ordenPor === 'fecha' ? 'white' : '#333'} />
+          <Text style={[styles.sortButtonText, ordenPor === 'fecha' && styles.sortButtonTextActive]}>Fecha</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.sortButton, ordenPor === 'importancia' && styles.sortButtonActive]}
+          onPress={() => setOrdenPor('importancia')}
+        >
+          <Ionicons name="flame" size={16} color={ordenPor === 'importancia' ? 'white' : '#333'} />
+          <Text style={[styles.sortButtonText, ordenPor === 'importancia' && styles.sortButtonTextActive]}>Importancia</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Lista de notas guardadas */}
-        {savedNotes.map((note) => (
-          <View key={note.id} style={styles.noteCard}>
-            <Text style={styles.noteText}>{note.text}</Text>
-            <TouchableOpacity onPress={() => deleteNote(note.id)}>
-              <Ionicons name="close-circle" size={22} color="#FF3B30" />
+      {/* Selector de vista */}
+      <View style={styles.selectorContainer}>
+        <TouchableOpacity 
+          style={[styles.selectorButton, vistaActual === 'materias' && styles.selectorActive]}
+          onPress={() => setVistaActual('materias')}
+        >
+          <Ionicons name="book" size={20} color={vistaActual === 'materias' ? 'white' : '#333'} />
+          <Text style={[styles.selectorText, vistaActual === 'materias' && styles.selectorTextActive]}>Materias</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.selectorButton, vistaActual === 'notas' && styles.selectorActive]}
+          onPress={() => setVistaActual('notas')}
+        >
+          <Ionicons name="document-text" size={20} color={vistaActual === 'notas' ? 'white' : '#333'} />
+          <Text style={[styles.selectorText, vistaActual === 'notas' && styles.selectorTextActive]}>Notas</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Lista según vista actual */}
+      {vistaActual === 'materias' ? (
+        <FlatList
+          data={materiasOrdenadas}
+          renderItem={renderMateria}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listaContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="book-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyText}>No hay materias</Text>
+              <Text style={styles.emptySubtext}>Toca el botón + para agregar</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={notas}
+          renderItem={renderNota}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listaContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="document-text-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyText}>No hay notas</Text>
+              <Text style={styles.emptySubtext}>Toca el botón + para agregar</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* ========== BOTÓN FLOTANTE + CON MENÚ ========== */}
+      {menuVisible && (
+        <TouchableOpacity 
+          style={styles.menuOverlay} 
+          activeOpacity={1} 
+          onPress={() => setMenuVisible(false)}
+        />
+      )}
+      
+      <View style={styles.fabContainer}>
+        {menuVisible && (
+          <View style={styles.menuOptions}>
+            <TouchableOpacity 
+              style={[styles.menuOption, styles.menuOptionMateria]}
+              onPress={() => {
+                setMenuVisible(false);
+                setModalMateriaVisible(true);
+              }}
+            >
+              <Ionicons name="book" size={24} color="white" />
+              <Text style={styles.menuOptionText}>Agregar Materia</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.menuOption, styles.menuOptionNota]}
+              onPress={() => {
+                setMenuVisible(false);
+                setModalNotaVisible(true);
+              }}
+            >
+              <Ionicons name="document-text" size={24} color="white" />
+              <Text style={styles.menuOptionText}>Agregar Nota</Text>
             </TouchableOpacity>
           </View>
-        ))}
+        )}
+        
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => setMenuVisible(!menuVisible)}
+        >
+          <Ionicons name={menuVisible ? "close" : "add"} size={30} color="white" />
+        </TouchableOpacity>
       </View>
 
-      {/* PRÓXIMO EXAMEN */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Próximo Examen</Text>
-        <View style={styles.examCard}>
-          <View style={styles.examHeader}>
-            <Ionicons name="alert-circle" size={28} color="#FF3B30" />
-            <Text style={styles.examTitle}>{nextExam.title}</Text>
-          </View>
-          <View style={styles.examDetails}>
-            <View style={styles.examDetail}>
-              <Ionicons name="calendar-outline" size={18} color="#666" />
-              <Text style={styles.examDetailText}>
-                {formatTaskDate(nextExam.date)}
-              </Text>
+      {/* ========== MODAL PARA AGREGAR MATERIA ========== */}
+      <Modal visible={modalMateriaVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalTitle}> Nueva Materia</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre de la materia *"
+              value={nuevaMateria.nombre}
+              onChangeText={(text) => setNuevaMateria({...nuevaMateria, nombre: text})}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Profesor (opcional)"
+              value={nuevaMateria.profesor}
+              onChangeText={(text) => setNuevaMateria({...nuevaMateria, profesor: text})}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder=" Fecha de entrega * (ej: 20/06/2026)"
+              value={nuevaMateria.fechaEntrega}
+              onChangeText={(text) => setNuevaMateria({...nuevaMateria, fechaEntrega: text})}
+            />
+            
+            <Text style={styles.label}> Nivel de importancia:</Text>
+            <View style={styles.importanciaContainer}>
+              <TouchableOpacity 
+                style={[styles.importanciaButton, nuevaMateria.importancia === 'Alta' && styles.importanciaAlta]}
+                onPress={() => setNuevaMateria({...nuevaMateria, importancia: 'Alta'})}
+              >
+                <Text style={styles.importanciaButtonText}> Alta</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.importanciaButton, nuevaMateria.importancia === 'Media' && styles.importanciaMedia]}
+                onPress={() => setNuevaMateria({...nuevaMateria, importancia: 'Media'})}
+              >
+                <Text style={styles.importanciaButtonText}> Media</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.importanciaButton, nuevaMateria.importancia === 'Baja' && styles.importanciaBaja]}
+                onPress={() => setNuevaMateria({...nuevaMateria, importancia: 'Baja'})}
+              >
+                <Text style={styles.importanciaButtonText}> Baja</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.examDetail}>
-              <Ionicons name="location-outline" size={18} color="#666" />
-              <Text style={styles.examDetailText}>{nextExam.location}</Text>
+            
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Descripción de la tarea (opcional)"
+              value={nuevaMateria.descripcion}
+              onChangeText={(text) => setNuevaMateria({...nuevaMateria, descripcion: text})}
+              multiline
+              numberOfLines={3}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalMateriaVisible(false)}>
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={agregarMateria}>
+                <Text style={styles.buttonText}>Guardar</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-          <View style={styles.countdownContainer}>
-            <Text style={styles.countdownNumber}>
-              {getDaysUntil(nextExam.date)}
-            </Text>
-            <Text style={styles.countdownLabel}>
-              {getDaysUntil(nextExam.date) === 1 ? 'día' : 'días'}
-            </Text>
-          </View>
+          </ScrollView>
         </View>
-      </View>
+      </Modal>
 
-      {/* Botones de navegación rápida */}
-      <View style={styles.navButtons}>
-        <TouchableOpacity style={styles.navButton} onPress={goToMaterials}>
-          <Ionicons name="folder-open-outline" size={30} color="#007AFF" />
-          <Text style={styles.navButtonText}>Materiales</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={goToTasks}>
-          <Ionicons name="checkbox-outline" size={30} color="#007AFF" />
-          <Text style={styles.navButtonText}>Tareas</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Espacio al final */}
-      <View style={styles.bottomSpace} />
-    </ScrollView>
+      {/* ========== MODAL PARA AGREGAR NOTA ========== */}
+      <Modal visible={modalNotaVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalTitle}> Nueva Nota</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Título de la nota *"
+              value={nuevaNota.titulo}
+              onChangeText={(text) => setNuevaNota({...nuevaNota, titulo: text})}
+            />
+            
+            <Text style={styles.label}>Materia relacionada (opcional):</Text>
+            <View style={styles.materiasContainer}>
+              <TouchableOpacity
+                style={[styles.materiaOption, nuevaNota.materiaId === '' && styles.materiaOptionSelected]}
+                onPress={() => setNuevaNota({...nuevaNota, materiaId: ''})}
+              >
+                <Text style={styles.materiaOptionText}>📌 Sin materia</Text>
+              </TouchableOpacity>
+              {materias.map(materia => (
+                <TouchableOpacity
+                  key={materia.id}
+                  style={[styles.materiaOption, nuevaNota.materiaId === materia.id && styles.materiaOptionSelected]}
+                  onPress={() => setNuevaNota({...nuevaNota, materiaId: materia.id})}
+                >
+                  <Text style={styles.materiaOptionText}>{materia.nombre}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Contenido de la nota"
+              value={nuevaNota.contenido}
+              onChangeText={(text) => setNuevaNota({...nuevaNota, contenido: text})}
+              multiline
+              numberOfLines={4}
+            />
+            
+            <TouchableOpacity 
+              style={styles.importanteButton}
+              onPress={() => setNuevaNota({...nuevaNota, importante: !nuevaNota.importante})}
+            >
+              <Ionicons name={nuevaNota.importante ? 'star' : 'star-outline'} size={24} color={nuevaNota.importante ? '#FF9800' : '#999'} />
+              <Text style={[styles.importanteText, nuevaNota.importante && styles.importanteTextActive]}>
+                Marcar como nota importante
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalNotaVisible(false)}>
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={agregarNota}>
+                <Text style={styles.buttonText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  greeting: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  date: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  pendingBadge: {
-    fontSize: 13,
-    color: '#007AFF',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  profileButton: {
-    padding: 5,
-  },
-  section: {
-    marginTop: 24,
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#000',
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  taskCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    marginBottom: 4,
-  },
-  taskDate: {
-    fontSize: 13,
-    color: '#666',
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginLeft: 10,
-  },
-  priorityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-  },
-  emptyStateText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  emptyStateSubtext: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#666',
-  },
-  quickNoteContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  quickNoteInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#000',
-    maxHeight: 80,
-  },
-  saveNoteButton: {
-    padding: 8,
-  },
-  noteCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#000',
-    marginRight: 10,
-  },
-  examCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  examHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  examTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginLeft: 12,
-    flex: 1,
-  },
-  examDetails: {
-    marginBottom: 20,
-  },
-  examDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  examDetailText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 10,
-  },
-  countdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-  },
-  countdownNumber: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#FF3B30',
-  },
-  countdownLabel: {
-    fontSize: 16,
-    color: '#666',
-    marginLeft: 8,
-  },
-  navButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 24,
-    paddingHorizontal: 20,
-  },
-  navButton: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    width: '45%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  navButtonText: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#007AFF',
-  },
-  bottomSpace: {
-    height: 30,
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  header: { backgroundColor: '#007AFF', padding: 20, paddingTop: 50, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  greeting: { fontSize: 24, fontWeight: 'bold', color: 'white' },
+  shareButton: { padding: 8 },
+  date: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 5 },
+  pendingCount: { fontSize: 16, color: 'white', marginTop: 10, fontWeight: '500' },
+  urgentCount: { fontSize: 14, color: '#ffbb33', marginTop: 5 },
+  
+  sortContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, backgroundColor: 'white', marginTop: 10, marginHorizontal: 15, borderRadius: 10, gap: 10 },
+  sortLabel: { fontSize: 14, fontWeight: '600', color: '#333' },
+  sortButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: '#e0e0e0', gap: 5 },
+  sortButtonActive: { backgroundColor: '#007AFF' },
+  sortButtonText: { fontSize: 12, color: '#333' },
+  sortButtonTextActive: { color: 'white' },
+  
+  selectorContainer: { flexDirection: 'row', margin: 15, backgroundColor: '#e0e0e0', borderRadius: 10, padding: 4 },
+  selectorButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, gap: 8 },
+  selectorActive: { backgroundColor: '#007AFF' },
+  selectorText: { fontSize: 14, fontWeight: '500', color: '#333' },
+  selectorTextActive: { color: 'white' },
+  
+  listaContainer: { padding: 15 },
+  
+  materiaCard: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 10, padding: 15, marginBottom: 10, alignItems: 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  materiaCompletada: { backgroundColor: '#e0e0e0', opacity: 0.7 },
+  checkbox: { marginRight: 12, marginTop: 2 },
+  materiaInfo: { flex: 1 },
+  materiaNombre: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  textoCompletado: { textDecorationLine: 'line-through', color: '#888' },
+  materiaDetalle: { fontSize: 13, color: '#666', marginTop: 2 },
+  importanciaBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginTop: 6 },
+  importanciaTexto: { color: 'white', fontSize: 11, fontWeight: 'bold' },
+  
+  notaCard: { backgroundColor: 'white', borderRadius: 10, padding: 15, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  notaImportante: { backgroundColor: '#FFF8E1', borderLeftWidth: 4, borderLeftColor: '#FF9800' },
+  notaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  notaMateriaTag: { flex: 1, marginLeft: 10 },
+  notaMateria: { fontSize: 12, color: '#666' },
+  notaTitulo: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+  notaContenido: { fontSize: 14, color: '#444', marginBottom: 8 },
+  notaFecha: { fontSize: 11, color: '#999', marginTop: 5 },
+  
+  deleteButton: { padding: 8 },
+  
+  fabContainer: { position: 'absolute', bottom: 20, right: 20, alignItems: 'flex-end' },
+  menuOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)' },
+  menuOptions: { marginBottom: 15, alignItems: 'flex-end' },
+  menuOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 10, width: 180, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 },
+  menuOptionMateria: { backgroundColor: '#4CAF50' },
+  menuOptionNota: { backgroundColor: '#2196F3' },
+  menuOptionText: { color: 'white', fontSize: 14, fontWeight: '600', marginLeft: 10 },
+  fab: { backgroundColor: '#007AFF', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
+  
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 20, width: '90%', maxHeight: '80%' },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 15, fontSize: 16 },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  label: { fontSize: 14, fontWeight: '500', marginBottom: 8, color: '#333' },
+  
+  importanciaContainer: { flexDirection: 'row', gap: 10, marginBottom: 15 },
+  importanciaButton: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#e0e0e0', alignItems: 'center' },
+  importanciaAlta: { backgroundColor: '#ff4444' },
+  importanciaMedia: { backgroundColor: '#ffbb33' },
+  importanciaBaja: { backgroundColor: '#00C851' },
+  importanciaButtonText: { fontWeight: 'bold', color: 'white' },
+  
+  materiasContainer: { marginBottom: 15, maxHeight: 150 },
+  materiaOption: { padding: 12, borderRadius: 8, marginBottom: 5, backgroundColor: '#f0f0f0' },
+  materiaOptionSelected: { backgroundColor: '#007AFF20', borderWidth: 1, borderColor: '#007AFF' },
+  materiaOptionText: { fontSize: 14, fontWeight: '500' },
+  
+  importanteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 15 },
+  importanteText: { fontSize: 14, color: '#666' },
+  importanteTextActive: { color: '#FF9800', fontWeight: 'bold' },
+  
+  modalButtons: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  cancelButton: { flex: 1, backgroundColor: '#ccc', padding: 12, borderRadius: 8, alignItems: 'center' },
+  saveButton: { flex: 1, backgroundColor: '#007AFF', padding: 12, borderRadius: 8, alignItems: 'center' },
+  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 50 },
+  emptyText: { fontSize: 18, color: '#999', marginTop: 10 },
+  emptySubtext: { fontSize: 14, color: '#bbb', marginTop: 5 },
 });
