@@ -170,7 +170,7 @@ export default function HomeScreen() {
         if (fechaNotificacion > new Date()) {
           const notificationId = await Notifications.scheduleNotificationAsync({
             content: {
-              title: '📚 Recordatorio de tarea',
+              title: 'Recordatorio de tarea',
               body: `"${nombre}" se entrega mañana ${fechaEntrega}`,
               sound: true,
             },
@@ -329,23 +329,23 @@ export default function HomeScreen() {
       return;
     }
 
-    let mensaje = '📚 MIS TAREAS PENDIENTES\n\n';
-    mensaje += `📅 ${new Date().toLocaleDateString()}\n`;
-    mensaje += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    let mensaje = 'MIS TAREAS PENDIENTES\n\n';
+    mensaje += `${new Date().toLocaleDateString()}\n`;
+    mensaje += `----------------------------------------\n\n`;
 
     materiasPendientes.forEach((materia, index) => {
-      const emojiImportancia = materia.importancia === 'Alta' ? '🔥' : materia.importancia === 'Media' ? '⚠️' : '📌';
-      mensaje += `${index + 1}. ${emojiImportancia} ${materia.nombre}\n`;
-      mensaje += `   📅 Entrega: ${materia.fechaEntrega}\n`;
+      const textoImportancia = materia.importancia === 'Alta' ? 'URGENTE' : materia.importancia === 'Media' ? 'IMPORTANTE' : 'NORMAL';
+      mensaje += `${index + 1}. ${textoImportancia} - ${materia.nombre}\n`;
+      mensaje += `   Entrega: ${materia.fechaEntrega}\n`;
       if (materia.descripcion) {
-        mensaje += `   📝 ${materia.descripcion}\n`;
+        mensaje += `   Descripcion: ${materia.descripcion}\n`;
       }
       mensaje += `\n`;
     });
 
-    mensaje += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    mensaje += `✅ Total: ${materiasPendientes.length} tareas pendientes\n`;
-    mensaje += `📱 Enviado desde Agenda Estudiantil`;
+    mensaje += `----------------------------------------\n`;
+    mensaje += `Total: ${materiasPendientes.length} tareas pendientes\n`;
+    mensaje += `Enviado desde Agenda Estudiantil`;
 
     try {
       const isAvailable = await Sharing.isAvailableAsync();
@@ -397,9 +397,9 @@ export default function HomeScreen() {
 
   const getImportanciaTexto = (importancia: string) => {
     switch (importancia) {
-      case 'Alta': return '🔴 Urgente';
-      case 'Media': return '🟡 Importante';
-      case 'Baja': return '🟢 Normal';
+      case 'Alta': return 'Urgente';
+      case 'Media': return 'Importante';
+      case 'Baja': return 'Normal';
       default: return '';
     }
   };
@@ -416,14 +416,14 @@ export default function HomeScreen() {
 
       <View style={styles.materiaInfo}>
         <Text style={[styles.materiaNombre, item.completada && styles.textoCompletado]}>{item.nombre}</Text>
-        {item.profesor ? <Text style={styles.materiaDetalle}>👨‍🏫 {item.profesor}</Text> : null}
-        <Text style={styles.materiaDetalle}>📅 Entrega: {item.fechaEntrega}</Text>
-        {item.descripcion ? <Text style={styles.materiaDetalle}>📝 {item.descripcion}</Text> : null}
+        {item.profesor ? <Text style={styles.materiaDetalle}>Profesor: {item.profesor}</Text> : null}
+        <Text style={styles.materiaDetalle}>Entrega: {item.fechaEntrega}</Text>
+        {item.descripcion ? <Text style={styles.materiaDetalle}>Descripcion: {item.descripcion}</Text> : null}
         <View style={[styles.importanciaBadge, { backgroundColor: getImportanciaColor(item.importancia) }]}>
           <Text style={styles.importanciaTexto}>{getImportanciaTexto(item.importancia)}</Text>
         </View>
         {item.notificacionId && (
-          <Text style={styles.notificacionTexto}>🔔 Recordatorio programado</Text>
+          <Text style={styles.notificacionTexto}>Recordatorio programado</Text>
         )}
       </View>
 
@@ -448,7 +448,7 @@ export default function HomeScreen() {
           />
         </TouchableOpacity>
         <View style={styles.notaMateriaTag}>
-          <Text style={styles.notaMateria}>📚 {getNombreMateria(item.materiaId)}</Text>
+          <Text style={styles.notaMateria}>Materia: {getNombreMateria(item.materiaId)}</Text>
         </View>
         <TouchableOpacity onPress={() => eliminarNota(item.id)}>
           <Ionicons name="trash-outline" size={20} color="#ff4444" />
@@ -456,7 +456,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.notaTitulo}>{item.titulo}</Text>
       <Text style={styles.notaContenido}>{item.contenido}</Text>
-      <Text style={styles.notaFecha}>📅 {item.fecha}</Text>
+      <Text style={styles.notaFecha}>{item.fecha}</Text>
     </View>
   );
 
@@ -493,7 +493,7 @@ export default function HomeScreen() {
         </Text>
         {tareasUrgentes.length > 0 && (
           <Text style={styles.urgentCount}>
-            🔥 {tareasUrgentes.length} urgentes
+            {tareasUrgentes.length} urgentes
           </Text>
         )}
       </View>
@@ -610,13 +610,13 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ===== MODAL AGREGAR MATERIA ===== */}
+      {/* ===== MODAL AGREGAR MATERIA (SIN EMOJIS) ===== */}
       <Modal visible={modalMateriaVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalTitle}>📚 Nueva Materia</Text>
+            <Text style={styles.modalTitle}>Nueva Materia</Text>
 
-            <Text style={styles.label}>📌 Nombre de la materia *</Text>
+            <Text style={styles.label}>Nombre de la materia *</Text>
             <TextInput
               style={styles.input}
               placeholder="Ej: Matemáticas, Historia, Programación..."
@@ -625,7 +625,7 @@ export default function HomeScreen() {
               onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, nombre: text })}
             />
 
-            <Text style={styles.label}>👨‍🏫 Profesor (opcional)</Text>
+            <Text style={styles.label}>Profesor (opcional)</Text>
             <TextInput
               style={styles.input}
               placeholder="Ej: Juan Pérez, María Gómez..."
@@ -634,7 +634,7 @@ export default function HomeScreen() {
               onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, profesor: text })}
             />
 
-            <Text style={styles.label}>📅 Fecha de entrega *</Text>
+            <Text style={styles.label}>Fecha de entrega *</Text>
             <TextInput
               style={styles.input}
               placeholder="Ej: 20/07/2026"
@@ -642,9 +642,9 @@ export default function HomeScreen() {
               value={nuevaMateria.fechaEntrega}
               onChangeText={(text) => setNuevaMateria({ ...nuevaMateria, fechaEntrega: text })}
             />
-            <Text style={styles.notaInfo}>🔔 Recibirás recordatorio 1 día antes a las 9:00 AM</Text>
+            <Text style={styles.notaInfo}>Recibirás recordatorio 1 día antes a las 9:00 AM</Text>
 
-            <Text style={styles.label}>⚠️ Nivel de importancia</Text>
+            <Text style={styles.label}>Nivel de importancia</Text>
             <View style={styles.importanciaContainer}>
               <TouchableOpacity
                 style={[styles.importanciaButton, nuevaMateria.importancia === 'Alta' && styles.importanciaAlta]}
@@ -666,7 +666,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>📝 Descripción (opcional)</Text>
+            <Text style={styles.label}>Descripción (opcional)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Ej: Examen parcial, proyecto final..."
@@ -689,13 +689,13 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* ===== MODAL AGREGAR NOTA ===== */}
+      {/* ===== MODAL AGREGAR NOTA (SIN EMOJIS) ===== */}
       <Modal visible={modalNotaVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalTitle}>📝 Nueva Nota</Text>
+            <Text style={styles.modalTitle}>Nueva Nota</Text>
 
-            <Text style={styles.label}>📌 Título de la nota *</Text>
+            <Text style={styles.label}>Título de la nota *</Text>
             <TextInput
               style={styles.input}
               placeholder="Ej: Repasar fórmulas..."
@@ -704,7 +704,7 @@ export default function HomeScreen() {
               onChangeText={(text) => setNuevaNota({ ...nuevaNota, titulo: text })}
             />
 
-            <Text style={styles.label}>📚 Materia relacionada (opcional)</Text>
+            <Text style={styles.label}>Materia relacionada (opcional)</Text>
             <View style={styles.materiasContainer}>
               <TouchableOpacity
                 style={[styles.materiaOption, nuevaNota.materiaId === '' && styles.materiaOptionSelected]}
@@ -723,7 +723,7 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            <Text style={styles.label}>📝 Contenido de la nota</Text>
+            <Text style={styles.label}>Contenido de la nota</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Escribe aquí tu nota..."
